@@ -26,4 +26,4 @@ def upload_image(image_file, aws_key):
     return True
 
 def generate_image_url(aws_key):
-    return f'https://{AWS_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{aws_key}'
+    return f'https://{AWS_BUCKET}.s3.amazonaws.com/{aws_key}'
