@@ -1,17 +1,23 @@
 import os
-import boto3
 from dotenv import load_dotenv
 from uuid import uuid4
 from helper import upload_image, generate_image_url
 from flask_cors import CORS, cross_origin
 
 from flask import (
-    Flask, render_template, flash, redirect, session, g, abort, jsonify, request
+    Flask, render_template, jsonify, request, g, session
 )
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
+
+from forms import(
+    CSRFProtection
+)
+
 from models import (
     db, connect_db, User, Property, Image)
+
+CURR_USER_KEY = "curr_user"
 
 app = Flask(__name__)
 CORS(app)
@@ -37,6 +43,57 @@ def root():
 
     return render_template("index.html")
 
+##############################################################################
+# User signup/login/logout
+
+@app.before_request
+def add_user_to_g():
+    """If we're logged in, add curr user to Flask global."""
+
+    if CURR_USER_KEY in session:
+        g.user = User.query.get(session[CURR_USER_KEY])
+
+    else:
+        g.user = None
+
+@app.before_request
+def add_csrf_only_form():
+    """Add a CSRF-only form so that every route can use it."""
+
+    g.csrf_form = CSRFProtection()
+
+def do_login(user):
+    """Log in user."""
+
+    session[CURR_USER_KEY] = user.id
+
+def do_logout():
+    """Log out user."""
+
+    if CURR_USER_KEY in session:
+        del session[CURR_USER_KEY]
+
+@app.route('/signup', methods=["GET", "POST"])
+def signup():
+    """Handle user signup.
+
+    Create new user and add to DB. Redirect to home page.
+
+    If form not valid, present form.
+
+    If there already is a user with that username: flash message and re-present
+    form.
+    """
+
+    do_logout()
+
+    form = UserAddForm()
+
+    if form.validate_on_submit():
+        try:
+            user = User.signup(
+
+            )
 
 ##############################################################################
 # Properties

@@ -1,7 +1,9 @@
 """SQLAlchemy models for shareBnB."""
 
+from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 
+bcrypt = Bcrypt()
 db = SQLAlchemy()
 
 
@@ -125,6 +127,42 @@ class User(db.Model):
             "last_name": self.last_name,
             "email": self.email,
         }
+
+    @classmethod
+    def signup(cls, username, password, email):
+        """Sign up user.
+
+        Hashes password and adds user to session.
+        """
+
+        hashed_pwd = bcrypt.generate_password_hash(password).decode('UTF-8')
+
+        user = User(
+            username=username,
+            password=hashed_pwd,
+            email=email,
+        )
+
+        db.session.add(user)
+        return user
+
+    @classmethod
+    def authenticate(cls, username, password):
+        """Find user with 'username' and 'password'.
+
+        This class method searches for a user who password hash
+        matches this password. If it finds such a user, returns
+        that user object. Else, returns False.
+        """
+
+        user = cls.query.filter_by(username=username).one_or_none()
+
+        if user:
+            is_auth = bcrypt.check_password.hash(user.password, password)
+            if is_auth:
+                return user
+
+        return False
 
 
 class Image(db.Model):
