@@ -142,7 +142,7 @@ class User(db.Model):
         }
 
     @classmethod
-    def signup(cls, username, password, first_name, last_name, is_admin, email):
+    def signup(cls, username, password, first_name, last_name, email, is_admin=False):
         """Sign up user.
 
         Hashes password and adds user to session.

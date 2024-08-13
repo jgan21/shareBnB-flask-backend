@@ -70,19 +70,7 @@ def add_user_to_g():
     else:
         g.user = None
 
-@app.before_request
-def do_login(user):
-    """Log in user."""
-
-    session[CURR_USER_KEY] = user.id
-
-def do_logout():
-    """Log out user."""
-
-    if CURR_USER_KEY in session:
-        del session[CURR_USER_KEY]
-
-@app.route('/signup', methods=["GET", "POST"])
+@app.route('/signup', methods=["POST"])
 def signup():
     """Handle user signup.
 
@@ -93,9 +81,27 @@ def signup():
     If there already is a user with that username: flash message and re-present
     form.
     """
+    data = request.json
 
-    do_logout()
+    username = data.get('username')
+    password = data.get('password')
+    email = data.get('email')
+    first_name = data.get('first_name')
+    last_name = data.get('last_name')
 
+    if not(username and password and email and first_name and last_name):
+        return jsonify({"error": "All fields are required."}), 400
+
+    try:
+        token = User.signup(username, password, first_name, last_name, email)
+
+        db.session.commit()
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Username or email already taken."}), 400
+
+    return jsonify({"token": token}), 201
 
 
 ##############################################################################
