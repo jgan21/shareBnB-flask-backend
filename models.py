@@ -3,6 +3,8 @@
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 
+from helper import create_token
+
 bcrypt = Bcrypt()
 db = SQLAlchemy()
 
@@ -100,6 +102,11 @@ class User(db.Model):
         nullable=False,
     )
 
+    password = db.Column(
+        db.String(50),
+        nullable=False,
+    )
+
     first_name = db.Column(
         db.String(30),
         nullable=False,
@@ -113,6 +120,12 @@ class User(db.Model):
     email = db.Column(
         db.String(50),
         nullable=False,
+    )
+
+    is_admin = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
     )
 
     properties = db.relationship('Property', backref="user")
@@ -129,7 +142,7 @@ class User(db.Model):
         }
 
     @classmethod
-    def signup(cls, username, password, email):
+    def signup(cls, username, password, first_name, last_name, is_admin, email):
         """Sign up user.
 
         Hashes password and adds user to session.
@@ -140,11 +153,16 @@ class User(db.Model):
         user = User(
             username=username,
             password=hashed_pwd,
+            first_name=first_name,
+            last_name=last_name,
             email=email,
+            is_admin=is_admin,
         )
 
         db.session.add(user)
-        return user
+        token = create_token(user)
+
+        return token
 
     @classmethod
     def authenticate(cls, username, password):

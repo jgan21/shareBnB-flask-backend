@@ -5,14 +5,17 @@ from helper import upload_image, generate_image_url
 from flask_cors import CORS, cross_origin
 
 from flask import (
-    Flask, render_template, jsonify, request, g, session
+    Flask,
+    render_template,
+    jsonify,
+    request,
+    g,
+    session
 )
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import(
-    CSRFProtection
-)
+import jwt
 
 from models import (
     db, connect_db, User, Property, Image)
@@ -50,18 +53,24 @@ def root():
 def add_user_to_g():
     """If we're logged in, add curr user to Flask global."""
 
-    if CURR_USER_KEY in session:
-        g.user = User.query.get(session[CURR_USER_KEY])
+    if 'token' in request.headers:
+        token = request.headers['token']
+
+        try:
+            payload = jwt.decode(
+                token,
+                app.config['SECRET_KEY'],
+                algorithms=['HS256'],
+            )
+            g.user = payload
+        except jwt.exceptions.InvalidSignatureError as err:
+            print("Invalid Sig, error is", err)
+            g.user = None
 
     else:
         g.user = None
 
 @app.before_request
-def add_csrf_only_form():
-    """Add a CSRF-only form so that every route can use it."""
-
-    g.csrf_form = CSRFProtection()
-
 def do_login(user):
     """Log in user."""
 
@@ -87,13 +96,7 @@ def signup():
 
     do_logout()
 
-    form = UserAddForm()
 
-    if form.validate_on_submit():
-        try:
-            user = User.signup(
-
-            )
 
 ##############################################################################
 # Properties

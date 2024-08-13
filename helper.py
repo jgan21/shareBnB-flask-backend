@@ -1,6 +1,9 @@
 import os
 import boto3
 
+import jwt
+
+jwt_secret_key = os.environ.get('JWT_SECRET_KEY')
 AWS_BUCKET = os.environ.get('AWS_BUCKET')
 AWS_REGION = os.environ.get('AWS_REGION')
 
@@ -27,3 +30,23 @@ def upload_image(image_file, aws_key):
 
 def generate_image_url(aws_key):
     return f'https://{AWS_BUCKET}.s3.amazonaws.com/{aws_key}'
+
+def create_token(user):
+
+    username = user.username
+    user_id = user.id
+    is_admin = user.is_admin
+
+    payload = {
+        'username': username,
+        'user_id' : user_id,
+        'is_admin': is_admin,
+    }
+
+    token = jwt.encode(
+        payload,
+        jwt_secret_key,
+        algorithm='HS256'
+    )
+
+    return token
