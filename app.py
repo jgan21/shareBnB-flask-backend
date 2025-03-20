@@ -1,4 +1,7 @@
 import os
+import datetime
+import jwt
+
 from dotenv import load_dotenv
 from uuid import uuid4
 from helper import upload_image, generate_image_url
@@ -14,8 +17,6 @@ from flask import (
 )
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
-
-import jwt
 
 from models import (
     db, connect_db, User, Property, Image)
@@ -47,28 +48,70 @@ def root():
     return render_template("index.html")
 
 ##############################################################################
-# User signup/login/logout
+# Auth Routes
+
+def createJWT(user):
+    """Creates and returns JWT token with username, admin status, and expiration
+      in payload."""
+
+    now = datetime.datetime.now(datetime.UTC)
+    exp_time = now + datetime.timedelta(hours=2) # Token expires in 2 hours
+
+    payload = {
+        'username': user.username,
+        'is_admin': user.is_admin,
+        'iat': now,
+        'exp': exp_time,
+    }
+
+    token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+    return token
+
+
+def authenticateJWT():
+    """Verifies that JWT is valid. Returns user object if valid, else None."""
+
+    auth_header = request.headers.get('Authorization', '')
+    parts = auth_header.split()
+
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+
+    token = parts[1]
+
+    try:
+        data = jwt.decode(
+            token,
+            app.config['SECRET_KEY'],
+            algorithms=['HS256']
+            )
+        user = User.query.filter_by(username=data['username']).first()
+
+        if user:
+            return user
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token has expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+    except Exception as e:
+        return jsonify({"error": f"Authentication failed: {str(e)}"}), 401
+
+    return None
+
 
 @app.before_request
 def add_user_to_g():
-    """If we're logged in, add curr user to Flask global."""
+    """If user is logged in, add curr user to Flask global object `g`."""
 
-    if 'token' in request.headers:
-        token = request.headers['token']
+    user = authenticateJWT()
 
-        try:
-            payload = jwt.decode(
-                token,
-                app.config['SECRET_KEY'],
-                algorithms=['HS256'],
-            )
-            g.user = payload
-        except jwt.exceptions.InvalidSignatureError as err:
-            print("Invalid Sig, error is", err)
-            g.user = None
-
-    else:
+    if isinstance(user, dict) and "error" in user:
         g.user = None
+    else:
+        g.user = user
+
 
 @app.route('/signup', methods=["POST"])
 def signup():
@@ -81,7 +124,10 @@ def signup():
     If there already is a user with that username: flash message and re-present
     form.
     """
-    data = request.json
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON data."}), 400
 
     username = data.get('username')
     password = data.get('password')
@@ -102,6 +148,30 @@ def signup():
         return jsonify({"error": "Username or email already taken."}), 400
 
     return jsonify({"token": token}), 201
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    """Logs in a user if valid credentials are provided, returns JWT token."""
+
+    data = request.get_json()
+
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"error": "Username and password required"}), 400
+
+    username = data['username']
+    password = data['password']
+
+    user = User.authenticate(username, password)
+    if not user:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    token = createJWT(user)
+
+    return jsonify({
+        "user": user.serialize(),
+        "token": token
+        }), 200
 
 
 ##############################################################################
