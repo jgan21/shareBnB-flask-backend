@@ -97,18 +97,18 @@ class User(db.Model):
     )
 
     username = db.Column(
-        db.String(30),
+        db.String(50),
         unique=True,
         nullable=False,
     )
 
     password = db.Column(
-        db.String(50),
+        db.String(200),
         nullable=False,
     )
 
     first_name = db.Column(
-        db.String(30),
+        db.String(50),
         nullable=False,
     )
 
@@ -118,7 +118,7 @@ class User(db.Model):
     )
 
     email = db.Column(
-        db.String(50),
+        db.String(100),
         nullable=False,
     )
 
@@ -176,7 +176,7 @@ class User(db.Model):
         user = cls.query.filter_by(username=username).one_or_none()
 
         if user:
-            is_auth = bcrypt.check_password.hash(user.password, password)
+            is_auth = bcrypt.check_password_hash(user.password, password)
             if is_auth:
                 return user
 
