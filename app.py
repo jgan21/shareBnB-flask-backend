@@ -4,7 +4,7 @@ import jwt
 
 # from dotenv import load_dotenv
 from uuid import uuid4
-from helper import upload_image, generate_image_url
+from helper import upload_image, generate_image_url, create_token
 from flask_cors import CORS
 
 from flask import (
@@ -30,7 +30,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
 app.config['SQLALCHEMY_ECHO'] = False
 app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
 app.config['SECRET_KEY'] = os.environ.get(
-    'SECRET_KEY', 'secret')
+    'JWT_SECRET_KEY', 'secret')
 
 toolbar = DebugToolbarExtension(app)
 
@@ -49,23 +49,17 @@ def root():
 ##############################################################################
 # Auth Routes
 
-def createJWT(user):
-    """Creates and returns JWT token with username, admin status, and expiration
-      in payload."""
+@app.before_request
+def add_user_to_g():
+    """If user is logged in, add curr user to Flask global object `g`."""
 
-    now = datetime.datetime.now(datetime.UTC)
-    exp_time = now + datetime.timedelta(hours=2) # Token expires in 2 hours
+    user = authenticateJWT()
+    print("Before request - User:", user, flush=True)
 
-    payload = {
-        'username': user.username,
-        'is_admin': user.is_admin,
-        'iat': now,
-        'exp': exp_time,
-    }
-
-    token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
-
-    return token
+    if isinstance(user, User):
+        g.user = user
+    else:
+        g.user = None
 
 
 def authenticateJWT():
@@ -87,7 +81,7 @@ def authenticateJWT():
             token,
             app.config['SECRET_KEY'],
             algorithms=['HS256']
-            )
+        )
         print("Decoded Token Data:", data, flush=True)
 
         username = data.get("username")
@@ -108,32 +102,14 @@ def authenticateJWT():
     except Exception as e:
         return None
 
-    return None
-
-
-@app.before_request
-def add_user_to_g():
-    """If user is logged in, add curr user to Flask global object `g`."""
-
-    user = authenticateJWT()
-    print("Before request - User:", user, flush=True)
-
-    if isinstance(user, User):
-        g.user = user
-    else:
-        g.user = None
-
 
 @app.route('/signup', methods=["POST"])
 def signup():
     """Handle user signup.
 
-    Create new user and add to DB. Redirect to home page.
+    Create new user and add to DB.
 
     If form not valid, present form.
-
-    If there already is a user with that username: flash message and re-present
-    form.
     """
     data = request.json
 
@@ -143,19 +119,28 @@ def signup():
     first_name = data.get('first_name')
     last_name = data.get('last_name')
 
-    if not(username and password and email and first_name and last_name):
+    if not (username and password and email and first_name and last_name):
         return jsonify({"error": "All fields are required."}), 400
 
     try:
-        token = User.signup(username, password, first_name, last_name, email)
+        user = User.signup(username, password, first_name, last_name, email)
 
         db.session.commit()
+        token = create_token(user)
+
+        return jsonify({
+            "token": token
+        }), 201
 
     except IntegrityError:
         db.session.rollback()
         return jsonify({"error": "Username or email already taken."}), 400
-
-    return jsonify({"token": token}), 201
+    except Exception as e:
+        # Generic error handler for unexpected errors
+        print(f"Unexpected error: {str(e)}")
+        return jsonify(
+            {"error": "An unexpected error occurred during signup."}
+        ), 500
 
 
 @app.route('/login', methods=['POST'])
@@ -165,21 +150,21 @@ def login():
     data = request.get_json()
 
     if not data or 'username' not in data or 'password' not in data:
-        return jsonify({"error":"Username and password required"}), 400
+        return jsonify({"error": "Username and password required"}), 400
 
     username = data['username']
     password = data['password']
 
     user = User.authenticate(username, password)
     if not user:
-        return jsonify({"error":"Invalid username or password"}), 401
+        return jsonify({"error": "Invalid username or password"}), 401
 
-    token = createJWT(user)
+    token = create_token(user)
 
     return jsonify({
         "user": user.serialize(),
         "token": token
-        }), 200
+    }), 200
 
 ##############################################################################
 # User
@@ -195,13 +180,13 @@ def get_users_by_username(username):
     if g.user.username != username:
         return jsonify(
             {"error": "Forbidden: You can only access your own data"}
-            ), 403
+        ), 403
 
     user = User.query.filter_by(username=username).first()
 
     if user:
         return jsonify({
-            'user' : user.serialize()
+            'user': user.serialize()
         }), 200
     else:
         return jsonify({"error": "User not found"}), 404
@@ -266,7 +251,7 @@ def add_property():
     image = Image(
         property_id=property.id,
         aws_key=aws_key,
-        url = generate_image_url(aws_key)
+        url=generate_image_url(aws_key)
     )
 
     db.session.add(image)
@@ -278,4 +263,3 @@ def add_property():
     serialized = property.serialize()
 
     return (jsonify(property=serialized), 201)
-

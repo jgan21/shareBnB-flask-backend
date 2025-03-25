@@ -160,9 +160,8 @@ class User(db.Model):
         )
 
         db.session.add(user)
-        token = create_token(user)
 
-        return token
+        return user
 
     @classmethod
     def authenticate(cls, username, password):

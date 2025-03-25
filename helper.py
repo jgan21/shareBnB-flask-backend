@@ -1,6 +1,6 @@
 import os
 import boto3
-
+import datetime
 import jwt
 
 jwt_secret_key = os.environ.get('JWT_SECRET_KEY')
@@ -37,10 +37,16 @@ def create_token(user):
     user_id = user.id
     is_admin = user.is_admin
 
+    now = datetime.datetime.now(datetime.UTC)
+    exp_time = now + datetime.timedelta(hours=2)  # Token expires in 2 hours
+
+
     payload = {
         'username': username,
         'user_id' : user_id,
         'is_admin': is_admin,
+        'iat': now,
+        'exp': exp_time,
     }
 
     token = jwt.encode(
