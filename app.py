@@ -1,5 +1,4 @@
 import os
-import datetime
 import jwt
 
 # from dotenv import load_dotenv
